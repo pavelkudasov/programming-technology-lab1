@@ -1,10 +1,11 @@
-#include <cerrno>
+#include "Keeper.h"
+#include "Stack.h"
+#include "Deque.h"
+#include "List.h"
 #include <cmath>
-#include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
-#include "Stack.h"
 
 #ifdef _WIN32
 #ifndef NOMINMAX
@@ -14,48 +15,124 @@
 #endif
 
 double readNumber(const char* prompt) {
-    char text[256];
+    std::cout << prompt;
+    double value;
+    if (!(std::cin >> value)) {
+        if (std::cin.eof()) throw std::runtime_error("Ввод завершён.");
+        std::cin.clear();
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        throw std::runtime_error("Нужно ввести число через точку.");
+    }
+    char symbol;
+    bool valid = true;
+    while (std::cin.get(symbol) && symbol != '\n') {
+        if (symbol != ' ' && symbol != '\t' && symbol != '\r') valid = false;
+    }
+    if (!valid || !std::isfinite(value)) {
+        throw std::runtime_error("Нужно ввести одно конечное число.");
+    }
+    return value;
+}
 
-    for (;;) {
-        std::cout << prompt;
-        std::cin.getline(text, sizeof(text));
+int readInt(const char* prompt, int min, int max) {
+    double value = readNumber(prompt);
+    if (value < min || value > max || std::floor(value) != value) {
+        throw std::out_of_range("Целое число вне допустимого диапазона.");
+    }
+    return static_cast<int>(value);
+}
 
-        if (std::cin.eof()) {
-            throw std::runtime_error("Ввод завершён.");
-        }
+int chooseObject(Keeper& keeper) {
+    if (keeper.getSize() == 0) throw std::runtime_error("Объектов пока нет.");
+    for (int i = 0; i < keeper.getSize(); i++) {
+        std::cout << i + 1 << ". " << keeper.get(i) << '\n';
+    }
+    return readInt("Номер объекта: ", 1, keeper.getSize()) - 1;
+}
 
-        if (std::cin.fail()) {
-            std::cin.clear();
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-            std::cout << "Слишком длинная строка. Повторите ввод.\n";
-            continue;
-        }
-
-        char* end;
-        errno = 0;
-        double value = std::strtod(text, &end);
-        bool hasNumber = end != text;
-
-        // После числа разрешены только пробельные символы.
-        while (*end == ' ' || *end == '\t' || *end == '\r') end++;
-
-        if (hasNumber && *end == '\0' && std::isfinite(value)
-            && errno != ERANGE) {
-            return value;
-        }
-
-        std::cout << "Ошибка: введите одно конечное число через точку.\n";
+void addObject(Keeper& keeper) {
+    int type = readInt("1 - стек, 2 - дек, 3 - список: ", 1, 3);
+    int filled = readInt("0 - пустой, 1 - с одним числом: ", 0, 1);
+    double value = 0;
+    if (filled == 1) value = readNumber("Первое число: ");
+    if (type == 1) {
+        Stack object = filled ? Stack(value) : Stack();
+        keeper.add(object);
+    } else if (type == 2) {
+        Deque object = filled ? Deque(value) : Deque();
+        keeper.add(object);
+    } else {
+        List object = filled ? List(value) : List();
+        keeper.add(object);
     }
 }
 
-int readInteger(const char* prompt, int min, int max) {
+void workWithObject(Queue& object) {
     for (;;) {
-        double value = readNumber(prompt);
-        if (value >= min && value <= max && std::floor(value) == value) {
-            return static_cast<int>(value);
+        std::cout << '\n' << object << '\n'
+                  << "У стека вершина справа, у дека и списка начало слева.\n"
+                  << "1. Добавить число\n2. Удалить число\n"
+                  << "3. Посмотреть число\n4. Изменить число\n"
+                  << "5. Очистить\n0. Назад\n";
+        try {
+            int choice = readInt("Выбор: ", 0, 5);
+            if (choice == 0) return;
+            int type = object.getType();
+            if (choice == 1) {
+                int position = 0;
+                if (type == 2) position = readInt("1 - начало, 2 - конец: ", 1, 2);
+                if (type == 3) {
+                    std::cout << "Позиции вставки: от 1 до " << object.getSize() + 1 << '\n';
+                    position = readInt("Позиция: ", 1, object.getSize() + 1) - 1;
+                }
+                double value = readNumber("Число: ");
+                if (type == 1) static_cast<Stack&>(object).push(value);
+                else if (type == 2) {
+                    Deque& deque = static_cast<Deque&>(object);
+                    if (position == 1) deque.pushFront(value);
+                    else deque.pushBack(value);
+                } else static_cast<List&>(object).insert(position, value);
+            } else if (choice == 2 || choice == 3) {
+                if (object.getSize() == 0) throw std::runtime_error("Контейнер пуст.");
+                double value;
+                if (type == 1) {
+                    Stack& stack = static_cast<Stack&>(object);
+                    value = choice == 2 ? stack.pop() : stack.top();
+                } else if (type == 2) {
+                    int side = readInt("1 - начало, 2 - конец: ", 1, 2);
+                    Deque& deque = static_cast<Deque&>(object);
+                    if (choice == 2) value = side == 1 ? deque.popFront() : deque.popBack();
+                    else value = side == 1 ? deque.front() : deque.back();
+                } else {
+                    int index = readInt("Номер элемента: ", 1, object.getSize()) - 1;
+                    List& list = static_cast<List&>(object);
+                    value = choice == 2 ? list.remove(index) : list.get(index);
+                }
+                std::cout << "Число: " << value << '\n';
+            } else if (choice == 4) {
+                if (object.getSize() == 0) throw std::runtime_error("Контейнер пуст.");
+                int index = readInt("Номер элемента слева: ", 1, object.getSize()) - 1;
+                double value = readNumber("Новое число: ");
+                object.set(index, value);
+            } else object.clear();
+        } catch (const std::exception& error) {
+            if (std::cin.eof()) throw;
+            std::cout << "Ошибка: " << error.what() << '\n';
         }
-        std::cout << "Нужно целое число от " << min << " до " << max << ".\n";
     }
+}
+
+void readFilename(char* filename, int size) {
+    std::cout << "Имя файла (например data.txt): ";
+    std::cin.getline(filename, size);
+    if (!std::cin) {
+        if (!std::cin.eof()) {
+            std::cin.clear();
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        }
+        throw std::runtime_error("Не удалось прочитать имя файла.");
+    }
+    if (filename[0] == '\0') throw std::runtime_error("Имя файла пустое.");
 }
 
 int main() {
@@ -63,49 +140,36 @@ int main() {
     SetConsoleOutputCP(CP_UTF8);
     SetConsoleCP(CP_UTF8);
 #endif
-
-    std::cout << "Лабораторная работа 1. Вариант 11\n"
-              << "Прототип: стек на основе очереди\n";
-
-    try {
-        int capacity = readInteger("Начальная вместимость стека: ",
-                                   1, Queue::MAX_CAPACITY);
-        Stack stack(capacity);
-
-        for (;;) {
-            std::cout << "\n1. Добавить число\n"
-                      << "2. Извлечь вершину\n"
-                      << "3. Посмотреть вершину\n"
-                      << "4. Показать стек\n"
-                      << "0. Выход\n";
-
-            try {
-                int choice = readInteger("Выбор: ", 0, 4);
-                if (choice == 0) break;
-
-                if (choice == 1) {
-                    double value = readNumber("Число: ");
-                    stack.push(value);
-                    std::cout << "Число добавлено.\n";
-                } else if (choice == 2) {
-                    double value = stack.pop();
-                    std::cout << "Извлечено: " << value << '\n';
-                } else if (choice == 3) {
-                    double value = stack.top();
-                    std::cout << "Вершина: " << value << '\n';
-                } else if (choice == 4) {
-                    std::cout << stack << '\n';
-                    std::cout << "Последнее число в скобках - вершина.\n";
+    Keeper keeper;
+    std::cout << "Лабораторная работа 1. Вариант 11\n";
+    for (;;) {
+        std::cout << "\n1. Создать объект\n2. Удалить объект\n"
+                  << "3. Показать все объекты\n4. Работать с объектом\n"
+                  << "5. Скопировать объект\n6. Сохранить в файл\n"
+                  << "7. Загрузить из файла (заменить текущие данные)\n0. Выход\n";
+        try {
+            int choice = readInt("Выбор: ", 0, 7);
+            if (choice == 0) break;
+            if (choice == 1) addObject(keeper);
+            else if (choice == 2) keeper.remove(chooseObject(keeper));
+            else if (choice == 3) {
+                if (keeper.getSize() == 0) std::cout << "Объектов пока нет.\n";
+                for (int i = 0; i < keeper.getSize(); i++) {
+                    std::cout << i + 1 << ". " << keeper.get(i) << '\n';
                 }
-            } catch (const std::exception& error) {
-                if (std::cin.eof()) throw;
-                std::cout << "Ошибка: " << error.what() << '\n';
+            } else if (choice == 4) workWithObject(keeper.get(chooseObject(keeper)));
+            else if (choice == 5) keeper.add(keeper.get(chooseObject(keeper)));
+            else {
+                char filename[256];
+                readFilename(filename, sizeof(filename));
+                if (choice == 6) keeper.save(filename);
+                else keeper.load(filename);
+                std::cout << "Готово.\n";
             }
+        } catch (const std::exception& error) {
+            if (std::cin.eof()) break;
+            std::cout << "Ошибка: " << error.what() << '\n';
         }
-    } catch (const std::exception& error) {
-        std::cout << error.what() << '\n';
-        return std::cin.eof() ? 0 : 1;
     }
-
     return 0;
 }

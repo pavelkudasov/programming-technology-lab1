@@ -3,151 +3,121 @@
 #include <iostream>
 #include <stdexcept>
 
-int Queue::nextId = 0;
-
-Queue::Queue()
-    : data(new double[4]), capacity(4), front(0), count(0), id(++nextId) {
-    std::cout << "Queue #" << id << ": конструктор без параметров\n";
+Queue::Queue() : first(nullptr), last(nullptr), count(0) {
+    std::cout << "Queue " << this << ": конструктор без параметров\n";
 }
 
-Queue::Queue(int initialCapacity)
-    : data(nullptr), capacity(initialCapacity), front(0), count(0), id(++nextId) {
-    if (capacity < 1 || capacity > MAX_CAPACITY) {
-        throw std::invalid_argument("Вместимость должна быть от 1 до 100000.");
-    }
-
-    data = new double[capacity];
-    std::cout << "Queue #" << id << ": конструктор с параметрами\n";
+Queue::Queue(double value) : first(nullptr), last(nullptr), count(0) {
+    enqueue(value);
+    std::cout << "Queue " << this << ": конструктор с параметром\n";
 }
 
-Queue::Queue(const Queue& other)
-    : data(new double[other.capacity]), capacity(other.capacity),
-      front(0), count(other.count), id(++nextId) {
-    // У копии свой массив. Копируем числа, а не адрес старого массива.
-    for (int i = 0; i < count; i++) {
-        data[i] = other.get(i);
+Queue::Queue(const Queue& other) : first(nullptr), last(nullptr), count(0) {
+    try {
+        Node* current = other.first;
+        while (current != nullptr) {
+            enqueue(current->value);
+            current = current->next;
+        }
+    } catch (...) {
+        clear();
+        throw;
     }
-
-    std::cout << "Queue #" << id << ": конструктор копирования из #"
-              << other.id << '\n';
+    std::cout << "Queue " << this << ": конструктор копирования\n";
 }
 
 Queue& Queue::operator=(const Queue& other) {
     if (this != &other) {
-        // Сначала создаём копию, только затем освобождаем старый массив.
-        double* copy = new double[other.capacity];
-        for (int i = 0; i < other.count; i++) {
-            copy[i] = other.get(i);
-        }
-
-        delete[] data;
-        data = copy;
-        capacity = other.capacity;
-        count = other.count;
-        front = 0;
+        // Готовим копию до удаления старых данных.
+        Queue* copy = other.clone();
+        clear();
+        first = copy->first;
+        last = copy->last;
+        count = copy->count;
+        copy->first = nullptr;
+        copy->last = nullptr;
+        copy->count = 0;
+        delete copy;
     }
     return *this;
 }
 
 Queue::~Queue() {
-    std::cout << "Queue #" << id << ": деструктор\n";
-    delete[] data;
-}
-
-int Queue::size() const { return count; }
-int Queue::getCapacity() const { return capacity; }
-int Queue::getId() const { return id; }
-bool Queue::isEmpty() const { return count == 0; }
-
-double Queue::get(int index) const {
-    if (index < 0 || index >= count) {
-        throw std::out_of_range("Номер элемента находится вне диапазона.");
-    }
-    // Очередь может начинаться не с нулевой ячейки массива.
-    return data[(front + index) % capacity];
-}
-
-void Queue::checkValue(double value) {
-    if (!std::isfinite(value)) {
-        throw std::invalid_argument("Число должно быть конечным.");
-    }
-}
-
-void Queue::set(int index, double value) {
-    if (index < 0 || index >= count) {
-        throw std::out_of_range("Номер изменяемого элемента вне диапазона.");
-    }
-    checkValue(value);
-    data[(front + index) % capacity] = value;
-}
-
-void Queue::setCapacity(int newCapacity) {
-    if (newCapacity < 1 || newCapacity > MAX_CAPACITY || newCapacity < count) {
-        throw std::invalid_argument(
-            "Вместимость: от 1 до 100000 и не меньше числа элементов.");
-    }
-
-    double* copy = new double[newCapacity];
-    for (int i = 0; i < count; i++) {
-        copy[i] = get(i);
-    }
-
-    delete[] data;
-    data = copy;
-    capacity = newCapacity;
-    front = 0;
-}
-
-void Queue::prepareAdd() {
-    if (count < capacity) return;
-
-    if (capacity == MAX_CAPACITY) {
-        throw std::runtime_error("Достигнут предел: 100000 элементов.");
-    }
-
-    int newCapacity = capacity * 2;
-    if (newCapacity > MAX_CAPACITY) newCapacity = MAX_CAPACITY;
-    setCapacity(newCapacity);
+    clear();
+    std::cout << "Queue " << this << ": деструктор\n";
 }
 
 void Queue::enqueue(double value) {
-    checkValue(value);
-    prepareAdd();
-
-    // Новое число ставим после последнего элемента очереди.
-    data[(front + count) % capacity] = value;
+    if (!std::isfinite(value)) {
+        throw std::invalid_argument("Нужно конечное число.");
+    }
+    Node* node = new Node;
+    node->value = value;
+    node->next = nullptr;
+    if (last == nullptr) first = node;
+    else last->next = node;
+    last = node;
     count++;
 }
 
 double Queue::dequeue() {
-    if (isEmpty()) {
-        throw std::runtime_error("Нельзя извлечь элемент: очередь пуста.");
-    }
-
-    double value = data[front];
-    front = (front + 1) % capacity;
+    if (count == 0) throw std::runtime_error("Контейнер пуст.");
+    Node* node = first;
+    double value = node->value;
+    first = first->next;
+    delete node;
     count--;
+    if (count == 0) last = nullptr;
     return value;
 }
 
 void Queue::rotate() {
-    // Извлекаем первое число и переносим его в конец.
-    double value = dequeue();
-    enqueue(value);
+    if (count < 2) return;
+    // Переносим первый узел очереди в конец.
+    Node* node = first;
+    first = first->next;
+    last->next = node;
+    last = node;
+    last->next = nullptr;
 }
 
-void Queue::print(std::ostream& out) const {
-    out << type() << " #" << id << ", элементов: " << count
-        << ", вместимость: " << capacity << ": [";
+int Queue::getSize() const { return count; }
 
-    for (int i = 0; i < count; i++) {
-        if (i != 0) out << ", ";
-        out << get(i);
+double Queue::get(int index) const {
+    if (index < 0 || index >= count) {
+        throw std::out_of_range("Неверный номер элемента.");
     }
-    out << ']';
+    Node* current = first;
+    for (int i = 0; i < index; i++) current = current->next;
+    return current->value;
+}
+
+void Queue::set(int index, double value) {
+    if (index < 0 || index >= count) {
+        throw std::out_of_range("Неверный номер элемента.");
+    }
+    if (!std::isfinite(value)) {
+        throw std::invalid_argument("Нужно конечное число.");
+    }
+    Node* current = first;
+    for (int i = 0; i < index; i++) current = current->next;
+    current->value = value;
+}
+
+void Queue::clear() {
+    while (count > 0) dequeue();
 }
 
 std::ostream& operator<<(std::ostream& out, const Queue& queue) {
-    queue.print(out);
-    return out;
+    if (queue.getType() == 1) out << "Стек";
+    else if (queue.getType() == 2) out << "Дек";
+    else out << "Список";
+    out << ": [";
+    Queue::Node* current = queue.first;
+    while (current != nullptr) {
+        out << current->value;
+        current = current->next;
+        if (current != nullptr) out << ", ";
+    }
+    return out << ']';
 }

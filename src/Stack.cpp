@@ -1,17 +1,16 @@
 #include "Stack.h"
 #include <iostream>
-#include <stdexcept>
 
 Stack::Stack() : Queue() {
-    std::cout << "Stack #" << getId() << ": конструктор без параметров\n";
+    std::cout << "Stack " << this << ": конструктор без параметров\n";
 }
 
-Stack::Stack(int capacity) : Queue(capacity) {
-    std::cout << "Stack #" << getId() << ": конструктор с параметрами\n";
+Stack::Stack(double value) : Queue(value) {
+    std::cout << "Stack " << this << ": конструктор с параметром\n";
 }
 
 Stack::Stack(const Stack& other) : Queue(other) {
-    std::cout << "Stack #" << getId() << ": конструктор копирования\n";
+    std::cout << "Stack " << this << ": конструктор копирования\n";
 }
 
 Stack& Stack::operator=(const Stack& other) {
@@ -20,34 +19,16 @@ Stack& Stack::operator=(const Stack& other) {
 }
 
 Stack::~Stack() {
-    std::cout << "Stack #" << getId() << ": деструктор\n";
+    std::cout << "Stack " << this << ": деструктор\n";
 }
 
-const char* Stack::type() const { return "Stack"; }
+int Stack::getType() const { return 1; }
 Queue* Stack::clone() const { return new Stack(*this); }
-
-void Stack::push(double value) {
-    enqueue(value);
-}
+void Stack::push(double value) { enqueue(value); }
 
 double Stack::pop() {
-    if (isEmpty()) {
-        throw std::runtime_error("Нельзя извлечь вершину: стек пуст.");
-    }
-
-    // Вершина - последнее число очереди. Переносим остальные числа за неё.
-    // Например: [10, 20, 30] -> [20, 30, 10] -> [30, 10, 20].
-    int rotations = size() - 1;
-    for (int i = 0; i < rotations; i++) {
-        rotate();
-    }
-
+    for (int i = 0; i < getSize() - 1; i++) rotate();
     return dequeue();
 }
 
-double Stack::top() const {
-    if (isEmpty()) {
-        throw std::runtime_error("Вершины нет: стек пуст.");
-    }
-    return get(size() - 1);
-}
+double Stack::top() const { return get(getSize() - 1); }
