@@ -36,8 +36,12 @@ double readNumber(const char* prompt) {
 
 int readInt(const char* prompt, int min, int max) {
     double value = readNumber(prompt);
-    if (value < min || value > max || std::floor(value) != value) {
-        throw std::out_of_range("Целое число вне допустимого диапазона.");
+    if (std::floor(value) != value) {
+        throw std::invalid_argument("Нужно ввести целое число без дробной части.");
+    }
+    if (value < min || value > max) {
+        std::cout << "Допустимый диапазон: от " << min << " до " << max << ".\n";
+        throw std::out_of_range("Число вне допустимого диапазона.");
     }
     return static_cast<int>(value);
 }
